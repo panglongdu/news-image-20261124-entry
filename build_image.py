@@ -1,115 +1,195 @@
 #!/usr/bin/env python3
-"""Draw the 24 Nov 2026 world-news summary image (1024x1024 PNG).
+"""v2 front page: 24 Nov 2026 world news as a rich magazine cover.
 
-Front-page / broadsheet style: a vision judge reads the picture, so every
-headline is rendered as exact, legible text over a simple world-map-like
-backdrop of dots and a big date block.
+Deep-navy broadsheet with an amber/red accent system: a dominant lead
+story with a drawn sea-battle panel, a band of big-number stats, two
+columns of tagged stories and a ticker strip along the bottom.
+Rendered with Pillow at 1024x1024.
 """
+import math
+import os
+
 from PIL import Image, ImageDraw, ImageFont
 
-W = H = 1024
-BG = (13, 17, 23)
-PAPER = (240, 234, 222)
-ACCENT = (232, 64, 54)      # red
-GOLD = (240, 178, 60)
-TEAL = (64, 180, 190)
-BLUE = (84, 130, 220)
-GREEN = (110, 190, 110)
-GREY = (160, 168, 178)
-DARKPANEL = (22, 28, 38)
+SIZE = 1024
+NAVY = (9, 13, 25)
+PANEL = (17, 23, 40)
+PANEL2 = (22, 30, 52)
+INK = (245, 239, 227)
+MUTE = (168, 176, 192)
+AMBER = (245, 176, 65)
+RED = (228, 62, 47)
+TEAL = (74, 192, 202)
+BLUE = (102, 144, 232)
+GREEN = (122, 202, 122)
+WHITE = (255, 255, 255)
 
-BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-REG = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-SERIFB = "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
+FB = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+FR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+FS = "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
 
-def f(path, size):
-    return ImageFont.truetype(path, size)
+canvas = Image.new("RGB", (SIZE, SIZE), NAVY)
+pen = ImageDraw.Draw(canvas, "RGBA")
 
-img = Image.new("RGB", (W, H), BG)
-d = ImageDraw.Draw(img, "RGBA")
 
-# dotted world backdrop (stylised continents as dot clusters)
-import random
-random.seed(24)
-for cx, cy, rx, ry in [(250, 300, 150, 90), (330, 470, 70, 110), (520, 280, 130, 80),
-                       (560, 420, 90, 110), (760, 300, 170, 100), (800, 520, 80, 60)]:
-    for _ in range(260):
-        x = random.gauss(cx, rx / 1.7)
-        y = random.gauss(cy, ry / 1.7)
-        if 0 < x < W and 0 < y < H:
-            d.ellipse([x - 2, y - 2, x + 2, y + 2], fill=(70, 90, 120, 110))
+def typeface(path, px):
+    return ImageFont.truetype(path, px)
 
-def wrap(text, font, width):
-    words, lines, cur = text.split(), [], ""
-    for w in words:
-        t = (cur + " " + w).strip()
-        if d.textlength(t, font=font) <= width:
-            cur = t
+
+def lines_for(text, face, width):
+    """Greedy word-wrap using real glyph widths."""
+    out, cur = [], ""
+    for word in text.split():
+        trial = (cur + " " + word).strip()
+        if pen.textlength(trial, font=face) <= width:
+            cur = trial
         else:
-            lines.append(cur); cur = w
+            out.append(cur)
+            cur = word
     if cur:
-        lines.append(cur)
-    return lines
+        out.append(cur)
+    return out
 
-def block(x, y, w, tag, tagcolor, headline, hsize, body, bsize=25, hcolor=PAPER):
-    d.rectangle([x, y, x + w, y + 6], fill=tagcolor)
-    d.text((x, y + 14), tag, font=f(BOLD, 20), fill=tagcolor)
-    yy = y + 42
-    for ln in wrap(headline, f(BOLD, hsize), w):
-        d.text((x, yy), ln, font=f(BOLD, hsize), fill=hcolor)
-        yy += hsize + 6
-    for ln in wrap(body, f(REG, bsize), w):
-        d.text((x, yy), ln, font=f(REG, bsize), fill=(205, 210, 218))
-        yy += bsize + 7
-    return yy
 
-# masthead
-d.rectangle([0, 0, W, 118], fill=(8, 10, 14))
-d.text((36, 18), "THE WORLD IN ONE DAY", font=f(SERIFB, 54), fill=PAPER)
-d.text((38, 84), "Tuesday, 24 November 2026  •  The day's news, in one picture", font=f(REG, 22), fill=GREY)
-d.rectangle([856, 22, 988, 96], outline=ACCENT, width=3)
-d.text((880, 30), "24", font=f(BOLD, 34), fill=ACCENT)
-d.text((876, 66), "NOV", font=f(BOLD, 20), fill=PAPER)
+def para(x, y, text, face, width, colour, leading):
+    for ln in lines_for(text, face, width):
+        pen.text((x, y), ln, font=face, fill=colour)
+        y += leading
+    return y
 
-# lead story
-y = block(36, 140, 952, "WAR WIDENS", ACCENT,
-          "UKRAINE SINKS RUSSIAN WARSHIP OFF LIBYA", 44,
-          "Sea drones strike at Benghazi, taking the war far beyond Europe. Strikes on the Kyiv region kill at least 14, and newly leaked data puts Russia's death toll near 500,000.", 26)
 
-# two columns, second row
-y2 = max(y + 18, 356)
-block(36, y2, 460, "TECH POWER", GOLD,
-      "HUANG BACK AT NVIDIA", 32,
-      "Trump-backed reversal restores Jensen Huang as CEO; his fortune leaps about $34bn in an evening.", 24)
-block(528, y2, 460, "MIDDLE EAST", TEAL,
-      "TANKERS BURN IN THE STRAIT OF HORMUZ", 32,
-      "Iran says three oil tankers struck sea mines and caught fire on the world's key oil route.", 24)
+def chip(x, y, label, colour, txt=WHITE, px=19):
+    face = typeface(FB, px)
+    w = pen.textlength(label, font=face) + 22
+    pen.rectangle([x, y, x + w, y + px + 12], fill=colour)
+    pen.text((x + 11, y + 5), label, font=face, fill=txt)
+    return w
 
-# third row, three columns
-y3 = y2 + 218
-block(36, y3, 296, "SPACE", BLUE,
-      "NATO EYES SPACE DEFENCE", 25,
-      "Allies respond to reports Russia may launch a nuclear space weapon.", 22)
-block(364, y3, 296, "ASIA", GREEN,
-      "SEOUL SCRAMBLES JETS", 25,
-      "Russian warplanes enter South Korea's air zone; China opens Tiangong to foreign crews.", 22)
-block(692, y3, 296, "UNITED STATES", GOLD,
-      "DEMOCRATS TAKE THE HOUSE", 25,
-      "A historic midterm majority of at least 258 seats; storms threaten Thanksgiving travel.", 22)
 
-# bottom strip
-y4 = y3 + 218
-d.rectangle([0, y4, W, H], fill=DARKPANEL)
-d.text((36, y4 + 16), "ALSO TODAY", font=f(BOLD, 20), fill=GREY)
-d.text((36, y4 + 46),
-       "UN chief: agree AI risk rules within a year",
-       font=f(REG, 22), fill=PAPER)
-d.text((36, y4 + 80),
-       "UN food agency: wars threaten aid for 7.3m more people",
-       font=f(REG, 22), fill=PAPER)
-d.text((36, y4 + 114),
-       "Greece reopens the Acropolis Museum  •  WHO chief visits Cuba amid a health crisis",
-       font=f(REG, 22), fill=PAPER)
+# ---------------------------------------------------------------- masthead
+pen.rectangle([0, 0, SIZE, 104], fill=(5, 7, 14))
+pen.text((40, 16), "THE WORLD IN ONE DAY", font=typeface(FS, 50), fill=INK)
+pen.text((42, 76), "Tuesday, 24 November 2026  -  the whole day, on one page",
+         font=typeface(FR, 20), fill=MUTE)
+pen.rectangle([872, 14, 984, 90], outline=AMBER, width=3)
+pen.text((892, 20), "24", font=typeface(FB, 36), fill=AMBER)
+pen.text((886, 60), "NOV", font=typeface(FB, 19), fill=INK)
+pen.rectangle([0, 108, SIZE, 112], fill=AMBER)
 
-img.save("/home/hatch/workspace/makefun/entry-news-image/entry.png")
-print("saved")
+# ---------------------------------------------------------------- lead story
+LX, LY, LW = 40, 132, 548
+chip(LX, LY, "LEAD STORY", RED)
+head_face = typeface(FB, 44)
+hy = para(LX, LY + 48,
+          "UKRAINE SINKS RUSSIAN WARSHIP OFF LIBYA",
+          head_face, LW, INK, 52)
+para(LX, hy + 8,
+     "Sea drones strike at Benghazi, carrying the war far beyond "
+     "Europe. Strikes near Kyiv kill at least 14.",
+     typeface(FR, 23), LW, MUTE, 30)
+pen.rectangle([LX, hy + 106, LX + 120, hy + 110], fill=RED)
+pen.text((LX, hy + 122), "ONE WAR, TWO FRONTS: BENGHAZI AND KYIV",
+         font=typeface(FB, 16), fill=AMBER)
+
+# lead visual panel: night sea, warship silhouette, incoming sea drones
+VX, VY, VW, VH = 616, 132, 368, 252
+pen.rectangle([VX, VY, VX + VW, VY + VH], fill=PANEL2)
+pen.line([600, VY, 600, VY + VH], fill=(52, 62, 90), width=2)
+for sx, sy, sr in ((30, 34, 2), (86, 58, 1), (140, 26, 2), (196, 52, 1),
+                   (238, 30, 2), (120, 84, 1), (64, 96, 1), (330, 44, 2)):
+    pen.ellipse([VX + sx - sr, VY + sy - sr, VX + sx + sr, VY + sy + sr],
+                fill=(200, 210, 235))
+pen.arc([VX + 296, VY + 16, VX + 340, VY + 60], 60, 300, fill=AMBER, width=4)
+pen.arc([VX + 306, VY + 14, VX + 344, VY + 58], 60, 300, fill=AMBER, width=3)
+for i in range(9):  # sea bands
+    yy = VY + 118 + i * 13
+    pen.line([VX + 8, yy, VX + VW - 8, yy], fill=(38, 62, 104), width=2)
+for sx in range(VX + 26, VX + VW - 70, 44):  # wave crests
+    for row, off in ((146, 0), (186, 22), (226, 8)):
+        pen.arc([sx + off, VY + row, sx + off + 26, VY + row + 12],
+                180, 360, fill=(90, 140, 200), width=2)
+# warship silhouette (right side of panel)
+ship = [(VX + 196, VY + 126), (VX + 344, VY + 126), (VX + 326, VY + 150),
+        (VX + 214, VY + 150)]
+pen.polygon(ship, fill=(6, 8, 16))
+pen.rectangle([VX + 244, VY + 100, VX + 300, VY + 126], fill=(6, 8, 16))
+pen.rectangle([VX + 262, VY + 78, VX + 282, VY + 100], fill=(6, 8, 16))
+pen.line([VX + 306, VY + 126, VX + 306, VY + 68], fill=(6, 8, 16), width=4)
+pen.line([VX + 306, VY + 68, VX + 330, VY + 80], fill=(6, 8, 16), width=3)
+# two sea drones (left) with dashed wakes aimed at the ship
+for dy in (100, 146):
+    pen.polygon([(VX + 42, VY + dy), (VX + 84, VY + dy + 9),
+                 (VX + 42, VY + dy + 18)], fill=RED)
+    for t in range(6):
+        x0 = VX + 92 + t * 16
+        pen.line([x0, VY + dy + 9, x0 + 8, VY + dy + 9],
+                 fill=(240, 120, 100), width=2)
+pen.text((VX + 18, VY + 12), "BENGHAZI - LIBYA", font=typeface(FB, 19),
+         fill=AMBER)
+# big toll figure under the panel
+pen.text((VX, VY + VH + 12), "500,000", font=typeface(FB, 54), fill=RED)
+pen.text((VX + 2, VY + VH + 74), "leaked Russian death toll",
+         font=typeface(FR, 19), fill=MUTE)
+
+# ---------------------------------------------------------------- stat band
+SY = 492
+pen.rectangle([40, SY, 984, SY + 92], fill=PANEL)
+stats = [("14+", "killed near Kyiv", RED),
+         ("$34B", "Huang fortune jump", AMBER),
+         ("258", "Democrat House seats", TEAL),
+         ("3", "tankers ablaze, Hormuz", BLUE)]
+for i, (num, label, colour) in enumerate(stats):
+    cx = 64 + i * 238
+    if i:
+        pen.line([cx - 22, SY + 16, cx - 22, SY + 80], fill=(52, 62, 90),
+                 width=2)
+    pen.text((cx, SY + 10), num, font=typeface(FB, 40), fill=colour)
+    pen.text((cx, SY + 60), label, font=typeface(FR, 17), fill=MUTE)
+
+# ---------------------------------------------------------------- story columns
+def story(x, y, w, tag, colour, headline, body):
+    chip(x, y, tag, colour, px=14)
+    yy = para(x, y + 28, headline, typeface(FB, 21), w, INK, 25)
+    yy = para(x, yy + 2, body, typeface(FR, 17), w, MUTE, 21)
+    return yy + 10
+
+
+COLW = 452
+y = 608
+y = story(40, y, COLW, "MIDDLE EAST", TEAL,
+          "TANKERS BURN IN HORMUZ STRAIT",
+          "Iran says three tankers hit sea mines in Hormuz.")
+y = story(40, y, COLW, "SPACE", BLUE,
+          "NATO EYES SPACE DEFENCE",
+          "Allies answer reports of a nuclear satellite plan.")
+y = story(40, y, COLW, "ASIA", GREEN,
+          "SEOUL SCRAMBLES JETS",
+          "Russian warplanes enter the South Korean air zone.")
+
+y = 608
+y = story(532, y, COLW, "UNITED STATES", AMBER,
+          "DEMOCRATS TAKE THE HOUSE",
+          "A historic midterm majority of at least 258 seats.")
+y = story(532, y, COLW, "SPACE TRAVEL", BLUE,
+          "TIANGONG OPENS ITS DOORS",
+          "China invites foreign astronauts to its station.")
+y = story(532, y, COLW, "CULTURE - HEALTH", RED,
+          "ACROPOLIS REOPENS; WHO IN CUBA",
+          "Athens' museum returns; WHO chief visits Havana.")
+
+# ---------------------------------------------------------------- ticker
+TY = 902
+pen.rectangle([0, TY, SIZE, SIZE], fill=(30, 10, 10))
+pen.rectangle([0, TY, SIZE, TY + 4], fill=RED)
+pen.text((40, TY + 12), "ALSO TODAY", font=typeface(FB, 18), fill=AMBER)
+ticks = ["UN chief: agree global AI risk rules within a year",
+         "UN food agency: wars threaten aid for 7.3 million more people",
+         "Storms threaten Thanksgiving travel across the United States"]
+ty = TY + 38
+for t in ticks:
+    pen.text((40, ty), "-  " + t, font=typeface(FR, 19), fill=INK)
+    ty += 26
+
+out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "entry.png")
+canvas.save(out)
+print("saved", out, os.path.getsize(out))
